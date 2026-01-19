@@ -1,0 +1,38 @@
+---
+- name: Operações de Dia 2 - Manutenção PostgreSQL
+  hosts: db_servers
+  become: yes
+  vars:
+    backup_path: "/mnt/backups/postgres"
+
+  tasks:
+    - name: Verificar status do serviço PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+      # Verifica se o banco está online antes de operar [cite: 21]
+
+    - name: Criar diretório de backup se não existir
+      ansible.builtin.file:
+        path: "{{ backup_path }}"
+        state: directory
+        mode: '0700'
+        owner: postgres
+
+    - name: Executar Backup do Banco de Dados (pg_dump)
+      ansible.builtin.shell:
+        cmd: "pg_dump -U postgres meu_banco_ficticio > {{ backup_path }}/db_backup_{{ ansible_date_time.date }}.sql"
+      become_user: postgres
+      # Realiza a tarefa de backup solicitada [cite: 21]
+
+    - name: Limpar backups com mais de 7 dias
+      ansible.builtin.find:
+        paths: "{{ backup_path }}"
+        age: 7d
+      register: old_backups
+
+    - name: Remover arquivos antigos
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ old_backups.files }}"
