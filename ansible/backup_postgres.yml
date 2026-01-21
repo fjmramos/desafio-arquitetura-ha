@@ -1,8 +1,14 @@
 ---
+# Playbook: Manutenção de Rotina PostgreSQL (Operações Day 2)
+# Descrição: Garante a saúde do serviço, realiza backup diário e gerencia retenção de arquivos.
+# Autor: Fabio Jacob
+# Versão: 1.0
+
 - name: Operações de Dia 2 - Manutenção PostgreSQL
   hosts: db_servers
   become: yes
   vars:
+    # Local centralizado para armazenamento dos dumps SQL
     backup_path: "/mnt/backups/postgres"
 
   tasks:
@@ -10,29 +16,32 @@
       ansible.builtin.service:
         name: postgresql
         state: started
-      # Verifica se o banco está online antes de operar [cite: 21]
+      # O fail-fast aqui evita erros nas tasks seguintes caso o DB esteja offline
 
     - name: Criar diretório de backup se não existir
       ansible.builtin.file:
         path: "{{ backup_path }}"
         state: directory
-        mode: '0700'
+        mode: '0700' # Acesso restrito apenas ao usuário postgres por segurança
         owner: postgres
 
     - name: Executar Backup do Banco de Dados (pg_dump)
       ansible.builtin.shell:
         cmd: "pg_dump -U postgres meu_banco_ficticio > {{ backup_path }}/db_backup_{{ ansible_date_time.date }}.sql"
       become_user: postgres
-      # Realiza a tarefa de backup solicitada [cite: 21]
+      # Nota: Em produção, considere usar 'pg_dumpall' ou ferramentas como o Barman
 
     - name: Limpar backups com mais de 7 dias
       ansible.builtin.find:
         paths: "{{ backup_path }}"
         age: 7d
+        recurse: no
       register: old_backups
+      # 'register' captura a lista de arquivos para ser processada na próxima task
 
     - name: Remover arquivos antigos
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
       with_items: "{{ old_backups.files }}"
+      # Loop executado apenas se 'old_backups' contiver arquivos encontrados
